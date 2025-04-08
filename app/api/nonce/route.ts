@@ -1,4 +1,3 @@
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 
@@ -6,9 +5,11 @@ export async function GET() {
   // Generate a random nonce
   const nonce = crypto.randomBytes(16).toString('hex')
   
-  // Store the nonce in cookies
-  const cookieStore = cookies()
-  cookieStore.set({
+  // Create response with nonce
+  const response = NextResponse.json({ nonce })
+  
+  // Set cookie using response headers
+  response.cookies.set({
     name: 'siwe',
     value: nonce,
     httpOnly: true,
@@ -17,5 +18,5 @@ export async function GET() {
     maxAge: 60 * 60, // 1 hour
   })
   
-  return NextResponse.json({ nonce })
+  return response
 } 

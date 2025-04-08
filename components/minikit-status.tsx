@@ -6,46 +6,41 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertCircle } from 'lucide-react'
 
 export function MinikitStatus() {
-  const [isInstalled, setIsInstalled] = useState(false)
-  const [showStatus, setShowStatus] = useState(false) // Start with hidden
+  // Don't initialize any state before detection
+  const [showWarning, setShowWarning] = useState<boolean | null>(null)
 
   useEffect(() => {
-    // Immediate initial check
+    // Initial check
     const installed = MiniKit.isInstalled()
-    setIsInstalled(installed)
     
-    // Only show warning if not installed after a short delay
-    // This prevents flash of warning if detection takes a moment
-    if (!installed) {
-      const timer = setTimeout(() => {
-        setShowStatus(true)
-      }, 300) // Short delay to prevent flashing
-      
-      return () => clearTimeout(timer)
+    // If we're running in WorldApp, never show the warning
+    if (installed) {
+      setShowWarning(false)
+      return;
     }
     
-    // Continue checking periodically
-    const intervalId = setInterval(() => {
-      const checkResult = MiniKit.isInstalled()
-      setIsInstalled(checkResult)
-      if (checkResult) {
-        setShowStatus(false) // Hide status if WorldApp detected
+    // If we're not in WorldApp, wait a short delay then show warning
+    const timer = setTimeout(() => {
+      if (!MiniKit.isInstalled()) {
+        setShowWarning(true)
+        
+        // Set a timeout to eventually hide the warning
+        const hideTimer = setTimeout(() => {
+          setShowWarning(false)
+        }, 10000)
+        
+        return () => clearTimeout(hideTimer)
       }
-    }, 1000)
+    }, 1000) // Longer delay to ensure detection works
     
-    // Hide status after 10 seconds
-    const hideTimer = setTimeout(() => {
-      setShowStatus(false)
-    }, 10000)
-    
-    return () => {
-      clearInterval(intervalId)
-      clearTimeout(hideTimer)
-    }
+    // Clean up
+    return () => clearTimeout(timer)
   }, [])
-
-  // Only show warning when not running in WorldApp and status is visible
-  if (!showStatus || isInstalled) return null
+  
+  // Don't render anything until we've made a determination
+  if (showWarning === null || showWarning === false) {
+    return null
+  }
 
   return (
     <div className="fixed bottom-20 left-0 right-0 mx-auto max-w-md px-4 z-50">
