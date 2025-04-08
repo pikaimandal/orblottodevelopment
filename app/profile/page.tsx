@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Wallet, Ticket, Trophy, LogOut, Loader2 } from "lucide-react"
 import { getUserTickets, getUserWinnings } from "@/lib/data"
 import { useWalletStore } from "@/lib/store"
+import { formatWalletAddress } from "@/lib/utils"
 
 export default function ProfilePage() {
   const { isConnected, isConnecting, walletAddress, username, totalTickets, totalWon, connectWallet, disconnectWallet } =
@@ -50,7 +51,7 @@ export default function ProfilePage() {
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle>{username ? `@${username}` : 'WorldApp User'}</CardTitle>
-                  <CardDescription>Wallet: {walletAddress}</CardDescription>
+                  <CardDescription>Wallet: {formatWalletAddress(walletAddress)}</CardDescription>
                 </div>
                 <Button variant="outline" size="sm" onClick={disconnectWallet} className="gap-2">
                   <LogOut className="h-4 w-4" />

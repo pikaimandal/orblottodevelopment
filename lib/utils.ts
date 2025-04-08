@@ -34,3 +34,19 @@ export function shortenAddress(address: string): string {
   if (!address) return ""
   return `${address.slice(0, 6)}...${address.slice(-4)}`
 }
+
+/**
+ * Formats a wallet address for display by truncating the middle section
+ * @param address Full wallet address
+ * @returns Shortened address in format 0x1234...5678
+ */
+export function formatWalletAddress(address: string): string {
+  if (!address || address.length < 10) return address
+  
+  // For already formatted addresses (like dev mode addresses)
+  if (address.includes('...')) return address
+  
+  const start = address.slice(0, 6)
+  const end = address.slice(-4)
+  return `${start}...${end}`
+}

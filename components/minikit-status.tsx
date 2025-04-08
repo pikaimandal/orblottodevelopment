@@ -7,29 +7,44 @@ import { AlertCircle } from 'lucide-react'
 
 export function MinikitStatus() {
   const [isInstalled, setIsInstalled] = useState(false)
-  const [showStatus, setShowStatus] = useState(true)
+  const [showStatus, setShowStatus] = useState(false) // Start with hidden
 
   useEffect(() => {
-    const checkInstallation = () => {
-      const installed = MiniKit.isInstalled()
-      setIsInstalled(installed)
+    // Immediate initial check
+    const installed = MiniKit.isInstalled()
+    setIsInstalled(installed)
+    
+    // Only show warning if not installed after a short delay
+    // This prevents flash of warning if detection takes a moment
+    if (!installed) {
+      const timer = setTimeout(() => {
+        setShowStatus(true)
+      }, 300) // Short delay to prevent flashing
+      
+      return () => clearTimeout(timer)
     }
-
-    checkInstallation()
-    const intervalId = setInterval(checkInstallation, 1000)
-
-    // Hide status after 10 seconds in development
-    const timeoutId = setTimeout(() => {
+    
+    // Continue checking periodically
+    const intervalId = setInterval(() => {
+      const checkResult = MiniKit.isInstalled()
+      setIsInstalled(checkResult)
+      if (checkResult) {
+        setShowStatus(false) // Hide status if WorldApp detected
+      }
+    }, 1000)
+    
+    // Hide status after 10 seconds
+    const hideTimer = setTimeout(() => {
       setShowStatus(false)
     }, 10000)
-
+    
     return () => {
       clearInterval(intervalId)
-      clearTimeout(timeoutId)
+      clearTimeout(hideTimer)
     }
   }, [])
 
-  // Only show warning when not running in WorldApp
+  // Only show warning when not running in WorldApp and status is visible
   if (!showStatus || isInstalled) return null
 
   return (

@@ -8,7 +8,9 @@ export async function GET() {
   
   // Store the nonce in cookies
   const cookieStore = cookies()
-  cookieStore.set('siwe', nonce, { 
+  cookieStore.set({
+    name: 'siwe',
+    value: nonce,
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',

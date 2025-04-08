@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Wallet, Ticket, AlertCircle, LogOut, Loader2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { generateTicketNumber } from "@/lib/utils"
+import { generateTicketNumber, formatWalletAddress } from "@/lib/utils"
 import { useWalletStore } from "@/lib/store"
 
 export default function BuyPage() {
@@ -78,7 +78,7 @@ export default function BuyPage() {
                 <div className="ml-2">
                   <AlertTitle>Connected</AlertTitle>
                   <AlertDescription>
-                    <div>Wallet: {walletAddress}</div>
+                    <div>Wallet: {formatWalletAddress(walletAddress)}</div>
                     {username && <div>Username: {username}</div>}
                   </AlertDescription>
                 </div>

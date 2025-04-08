@@ -26,7 +26,10 @@ export async function POST(req: NextRequest) {
     const validMessage = await verifySiweMessage(payload, nonce)
     
     // Clear the nonce after verification
-    cookieStore.delete('siwe')
+    cookieStore.delete({
+      name: 'siwe',
+      path: '/',
+    })
     
     return NextResponse.json({
       status: 'success',
