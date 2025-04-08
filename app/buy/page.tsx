@@ -7,13 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Wallet, Ticket, AlertCircle, LogOut } from "lucide-react"
+import { Wallet, Ticket, AlertCircle, LogOut, Loader2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { generateTicketNumber } from "@/lib/utils"
 import { useWalletStore } from "@/lib/store"
 
 export default function BuyPage() {
-  const { isConnected, walletAddress, username, connectWallet, disconnectWallet } = useWalletStore()
+  const { isConnected, isConnecting, walletAddress, username, connectWallet, disconnectWallet } = useWalletStore()
   const [ticketCount, setTicketCount] = useState(1)
   const [selectedAmount, setSelectedAmount] = useState(1)
   const [generatedTickets, setGeneratedTickets] = useState<string[]>([])
@@ -50,9 +50,22 @@ export default function BuyPage() {
             <CardDescription>Connect your WorldWallet to buy ORB Lotto tickets</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center">
-            <Button onClick={connectWallet} className="gap-2">
-              <Wallet className="h-4 w-4" />
-              Connect WorldWallet
+            <Button 
+              onClick={connectWallet} 
+              className="gap-2"
+              disabled={isConnecting}
+            >
+              {isConnecting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <Wallet className="h-4 w-4" />
+                  Connect WorldWallet
+                </>
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -64,7 +77,10 @@ export default function BuyPage() {
                 <AlertCircle className="h-4 w-4 mt-0.5" />
                 <div className="ml-2">
                   <AlertTitle>Connected</AlertTitle>
-                  <AlertDescription>Wallet connected: {walletAddress}</AlertDescription>
+                  <AlertDescription>
+                    <div>Wallet: {walletAddress}</div>
+                    {username && <div>Username: {username}</div>}
+                  </AlertDescription>
                 </div>
               </div>
               <Button variant="outline" size="sm" onClick={disconnectWallet} className="gap-2">
