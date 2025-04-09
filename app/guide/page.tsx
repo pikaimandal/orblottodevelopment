@@ -11,6 +11,38 @@ export default function GuidePage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              Prize Distribution
+            </CardTitle>
+            <CardDescription>How prizes are distributed for each draw</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div>
+                <strong className="block">Prize Pool: 60%</strong>
+                <p className="text-sm text-muted-foreground">
+                  60% of all ticket sales go directly to the prize pool for winners.
+                </p>
+              </div>
+              <div>
+                <strong className="block">Foundation Contribution: 10%</strong>
+                <p className="text-sm text-muted-foreground">
+                  10% of ticket sales go to the WorldApp foundation for community development.
+                </p>
+              </div>
+              <div>
+                <strong className="block">Operations: 30%</strong>
+                <p className="text-sm text-muted-foreground">
+                  30% covers operational costs, including development and maintenance.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-primary" />
               How to Buy Tickets
             </CardTitle>
@@ -55,38 +87,6 @@ export default function GuidePage() {
                 </p>
               </li>
             </ol>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
-              Prize Distribution
-            </CardTitle>
-            <CardDescription>How prizes are distributed for each draw</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div>
-                <strong className="block">Prize Pool: 60%</strong>
-                <p className="text-sm text-muted-foreground">
-                  60% of all ticket sales go directly to the prize pool for winners.
-                </p>
-              </div>
-              <div>
-                <strong className="block">Foundation Contribution: 10%</strong>
-                <p className="text-sm text-muted-foreground">
-                  10% of ticket sales go to the WorldApp foundation for community development.
-                </p>
-              </div>
-              <div>
-                <strong className="block">Operations: 30%</strong>
-                <p className="text-sm text-muted-foreground">
-                  30% covers operational costs, including development and maintenance.
-                </p>
-              </div>
-            </div>
           </CardContent>
         </Card>
         

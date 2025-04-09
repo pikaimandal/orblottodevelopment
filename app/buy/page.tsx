@@ -100,12 +100,14 @@ export default function BuyPage() {
       try {
         // Configure payment params exactly as required by WorldApp documentation
         const { finalPayload, commandPayload } = await MiniKit.commandsAsync.pay({
-          // Important: using 'any' type to bypass TypeScript errors
-          // since MiniKit docs may be ahead of TypeScript definitions
-          id: paymentData.paymentId,
-          token: currency,
-          recipient: paymentData.recipientAddress,
-          amount: paymentData.amount.toString()
+          // Using the exact format from Worldcoin documentation
+          reference: paymentData.paymentId,
+          to: paymentData.recipientAddress,
+          tokens: [{
+            symbol: currency,
+            token_amount: paymentData.amount.toString()
+          }],
+          description: `Purchase of ${ticketCount} ${getLottoTitle(selectedAmount)} tickets`
         } as any)
         
         console.log("Payment result:", { finalPayload, commandPayload })
