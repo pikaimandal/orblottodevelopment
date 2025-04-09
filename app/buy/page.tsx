@@ -7,16 +7,27 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Wallet, Ticket, AlertCircle, LogOut, Loader2 } from "lucide-react"
+import { Wallet, Ticket, AlertCircle, LogOut, Loader2, CreditCard } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { generateTicketNumber, formatWalletAddress } from "@/lib/utils"
 import { useWalletStore } from "@/lib/store"
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select"
+import { MiniKit } from "@worldcoin/minikit-js"
+import { toast } from "@/components/ui/use-toast"
 
 export default function BuyPage() {
   const { isConnected, isConnecting, walletAddress, username, connectWallet, disconnectWallet } = useWalletStore()
   const [ticketCount, setTicketCount] = useState(1)
   const [selectedAmount, setSelectedAmount] = useState(2)
   const [generatedTickets, setGeneratedTickets] = useState<string[]>([])
+  const [currency, setCurrency] = useState<"WLD" | "USDC">("WLD")
+  const [isProcessing, setIsProcessing] = useState(false)
 
   const getLottoTitle = (amount: number) => {
     switch (amount) {
@@ -33,8 +44,110 @@ export default function BuyPage() {
     }
   }
 
-  const handleBuyTickets = () => {
-    // Generate random ticket numbers
+  const handleBuyTickets = async () => {
+    if (!isConnected) {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet to purchase tickets",
+        variant: "destructive"
+      })
+      return
+    }
+    
+    try {
+      setIsProcessing(true)
+      
+      // Check if MiniKit is installed
+      if (!MiniKit.isInstalled()) {
+        toast({
+          title: "WorldApp not detected",
+          description: "This feature requires WorldApp to work properly",
+          variant: "destructive"
+        })
+        // Fall back to simulated mode for development
+        simulateTicketGeneration()
+        setIsProcessing(false)
+        return
+      }
+      
+      // 1. Initialize payment in the backend
+      const initRes = await fetch("/api/initiate-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          ticketCount,
+          amount: selectedAmount,
+          currency
+        })
+      })
+      
+      if (!initRes.ok) {
+        throw new Error("Failed to initiate payment")
+      }
+      
+      const paymentData = await initRes.json()
+      
+      // 2. Send payment command to World App
+      // Using type assertion to bypass TypeScript errors since the docs may be ahead of the types
+      const { commandPayload, finalPayload } = await MiniKit.commandsAsync.pay({
+        id: paymentData.paymentId,
+        amount: paymentData.amount.toString(),
+        token: currency,
+        recipient: paymentData.recipientAddress,
+      } as any)
+      
+      // 3. Check if payment was successful
+      if (finalPayload.status === "error") {
+        throw new Error("Payment failed")
+      }
+      
+      // 4. Verify payment with backend
+      const verifyRes = await fetch("/api/verify-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          paymentId: paymentData.paymentId,
+          transactionId: finalPayload.transaction_id
+        })
+      })
+      
+      if (!verifyRes.ok) {
+        throw new Error("Failed to verify payment")
+      }
+      
+      // 5. Generate tickets after successful payment
+      const tickets = Array.from({ length: ticketCount }, () => generateTicketNumber())
+      setGeneratedTickets(tickets)
+      
+      toast({
+        title: "Purchase successful!",
+        description: `You purchased ${ticketCount} ${getLottoTitle(selectedAmount)} tickets`,
+        variant: "default"
+      })
+      
+    } catch (error: any) {
+      console.error("Error purchasing tickets:", error)
+      toast({
+        title: "Purchase failed",
+        description: error.message || "Failed to purchase tickets",
+        variant: "destructive"
+      })
+      
+      // Fallback for development
+      if (process.env.NODE_ENV !== "production") {
+        simulateTicketGeneration()
+      }
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+  
+  // Fallback for development
+  const simulateTicketGeneration = () => {
     const tickets = Array.from({ length: ticketCount }, () => generateTicketNumber())
     setGeneratedTickets(tickets)
   }
@@ -123,6 +236,19 @@ export default function BuyPage() {
                     />
                   </div>
 
+                  <div className="space-y-2">
+                    <Label htmlFor="currency">Payment Currency</Label>
+                    <Select value={currency} onValueChange={(value) => setCurrency(value as "WLD" | "USDC")}>
+                      <SelectTrigger id="currency">
+                        <SelectValue placeholder="Select currency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="WLD">WLD</SelectItem>
+                        <SelectItem value="USDC">USDC</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="bg-muted p-3 rounded-md">
                     <div className="flex justify-between text-sm mb-2">
                       <span>Price per ticket:</span>
@@ -132,6 +258,10 @@ export default function BuyPage() {
                       <span>Number of tickets:</span>
                       <span>{ticketCount}</span>
                     </div>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span>Currency:</span>
+                      <span>{currency}</span>
+                    </div>
                     <div className="flex justify-between font-medium">
                       <span>Total:</span>
                       <span>${selectedAmount * ticketCount}</span>
@@ -140,9 +270,22 @@ export default function BuyPage() {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button onClick={handleBuyTickets} className="w-full gap-2">
-                  <Ticket className="h-4 w-4" />
-                  Buy Tickets
+                <Button 
+                  onClick={handleBuyTickets} 
+                  className="w-full gap-2"
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="h-4 w-4" />
+                      Buy Tickets with {currency}
+                    </>
+                  )}
                 </Button>
               </CardFooter>
             </Card>

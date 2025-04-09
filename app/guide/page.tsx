@@ -26,7 +26,7 @@ export default function GuidePage() {
             <li className="pl-2">
               <span className="font-medium">Choose your lottery</span>
               <p className="text-sm text-muted-foreground ml-6">
-                Select from $1 (Basic), $5 (Plus), $10 (Super), $100 (Mega), or $500 (Jackpot) lotteries. Higher value
+                Select from $2 (Basic), $5 (Plus), $10 (Super), $100 (Mega), or $500 (Jackpot) lotteries. Higher value
                 lotteries have bigger prizes!
               </p>
             </li>
