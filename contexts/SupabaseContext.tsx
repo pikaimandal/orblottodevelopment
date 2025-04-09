@@ -84,8 +84,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       console.log('Signing in with wallet address:', walletAddress);
       
-      // Use direct SQL query (bypasses RLS)
-      // This is a workaround for the RLS policy issues
+      // First, check if user exists with this wallet address in our users table
       try {
         // Check if user exists first with a direct query
         const { data: existingUsers, error: selectError } = await supabase
@@ -104,54 +103,60 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         
-        // If user doesn't exist, create one with a direct insert
-        // Generate a UUID for the user
-        const userId = crypto.randomUUID ? crypto.randomUUID() : 
-          'user_' + Math.random().toString(36).substring(2, 15);
+        // If user doesn't exist, we need to create an auth user first
+        console.log('User not found, creating new auth user first');
         
-        // Use REST API directly to bypass RLS
-        const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/users`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify({ 
-            id: userId,
-            wallet_address: walletAddress.toLowerCase(),
-            username: username || 'worldapp_user',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
+        // Create an auth user - using a random email since we identify by wallet address
+        const email = `${walletAddress.toLowerCase()}_${Date.now()}@example.com`;
+        const password = `Password123!${Math.random().toString(36).substring(2)}`;
+        
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              wallet_address: walletAddress.toLowerCase(),
+              username: username || 'worldapp_user'
+            }
+          }
         });
         
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('API Error creating user:', errorData);
-          
-          // Fallback to creating a temporary user object client-side
-          // This user won't be in the database but will allow the app to function
-          const tempUser = {
-            id: userId,
-            wallet_address: walletAddress.toLowerCase(),
-            username: username || 'worldapp_user',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          
-          setUser(tempUser as User);
-          console.log('Created temporary user object (not in DB):', tempUser);
-        } else {
-          const newUser = await response.json();
-          console.log('Created new user:', newUser);
-          setUser(newUser[0]);
+        if (authError) {
+          console.error('Error creating auth user:', authError);
+          throw authError;
         }
+        
+        if (!authData.user) {
+          console.error('No user returned from auth signup');
+          throw new Error('Failed to create auth user');
+        }
+        
+        console.log('Auth user created with ID:', authData.user.id);
+        
+        // Now create the user in our users table
+        const { data: newUser, error: insertError } = await supabase
+          .from('users')
+          .insert([
+            { 
+              id: authData.user.id,
+              wallet_address: walletAddress.toLowerCase(),
+              username: username || 'worldapp_user'
+            }
+          ])
+          .select()
+          .single();
+          
+        if (insertError) {
+          console.error('Error creating user in users table:', insertError);
+          throw insertError;
+        }
+        
+        console.log('User created successfully:', newUser);
+        setUser(newUser);
       } catch (error) {
         console.error('Error in user management:', error);
         
-        // Always provide a user object even if we fail to create one in the database
-        // This ensures the app can continue functioning even with DB issues
+        // Create a temporary client-side user
         const tempUser = {
           id: 'temp_' + Math.random().toString(36).substring(2, 15),
           wallet_address: walletAddress.toLowerCase(),
@@ -161,7 +166,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         };
         
         setUser(tempUser as User);
-        console.log('Using fallback user object due to error:', tempUser);
+        console.log('Using fallback user object due to database error:', tempUser);
       }
     } catch (error) {
       console.error('Error signing in:', error);
