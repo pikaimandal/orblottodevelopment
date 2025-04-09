@@ -15,7 +15,7 @@ import { useWalletStore } from "@/lib/store"
 export default function BuyPage() {
   const { isConnected, isConnecting, walletAddress, username, connectWallet, disconnectWallet } = useWalletStore()
   const [ticketCount, setTicketCount] = useState(1)
-  const [selectedAmount, setSelectedAmount] = useState(1)
+  const [selectedAmount, setSelectedAmount] = useState(2)
   const [generatedTickets, setGeneratedTickets] = useState<string[]>([])
 
   const getLottoTitle = (amount: number) => {
@@ -90,9 +90,9 @@ export default function BuyPage() {
             </div>
           </Alert>
 
-          <Tabs defaultValue="1" onValueChange={(value) => setSelectedAmount(Number(value))}>
+          <Tabs defaultValue="2" onValueChange={(value) => setSelectedAmount(Number(value))}>
             <TabsList className="grid grid-cols-5 mb-6">
-              <TabsTrigger value="1">$1</TabsTrigger>
+              <TabsTrigger value="2">$2</TabsTrigger>
               <TabsTrigger value="5">$5</TabsTrigger>
               <TabsTrigger value="10">$10</TabsTrigger>
               <TabsTrigger value="100">$100</TabsTrigger>

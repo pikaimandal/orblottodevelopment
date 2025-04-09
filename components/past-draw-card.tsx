@@ -32,7 +32,9 @@ export function PastDrawCard({ draw }: PastDrawCardProps) {
                         ? "Super"
                         : draw.amount === 5
                           ? "Plus"
-                          : "Basic"}
+                          : draw.amount === 2
+                            ? "Basic"
+                            : "Basic"}
                 </Badge>
               </h3>
               <p className="text-sm text-muted-foreground">{formatDate(draw.drawDate)}</p>

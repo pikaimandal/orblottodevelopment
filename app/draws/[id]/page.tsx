@@ -30,6 +30,8 @@ export default function DrawDetailsPage({
         return "Super"
       case 5:
         return "Plus"
+      case 2:
+        return "Basic"
       default:
         return "Basic"
     }

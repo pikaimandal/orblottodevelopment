@@ -31,10 +31,10 @@ export const pastDraws = [
   },
   {
     id: "draw-4",
-    amount: 1,
+    amount: 2,
     drawDate: "2025-04-03T20:00:00Z",
     ticketsSold: 12450,
-    firstPrize: 8715,
+    firstPrize: 14940,
   },
   {
     id: "draw-5",
