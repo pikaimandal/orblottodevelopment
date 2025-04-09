@@ -22,11 +22,28 @@ export async function POST(request: Request) {
       );
     }
     
+    // Verify environment variables
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing Supabase credentials:', { 
+        hasUrl: !!supabaseUrl, 
+        hasServiceKey: !!supabaseServiceKey 
+      });
+      return NextResponse.json(
+        { error: 'Server configuration error: Missing Supabase credentials' },
+        { status: 500 }
+      );
+    }
+    
+    console.log('Creating Supabase admin client with URL:', supabaseUrl);
+    
     // Create a Supabase client with the service role key
     // This bypasses RLS policies and allows direct database manipulation
     const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+      supabaseUrl,
+      supabaseServiceKey,
       {
         auth: {
           autoRefreshToken: false,
@@ -35,32 +52,52 @@ export async function POST(request: Request) {
       }
     );
     
+    // Simple test to ensure the client is authenticated with admin privileges
+    const { data: testData, error: testError } = await supabaseAdmin.rpc('postgres_version');
+    if (testError) {
+      console.error('Supabase admin client authentication test failed:', testError);
+      return NextResponse.json(
+        { error: 'Supabase admin client failed to authenticate properly', details: testError },
+        { status: 500 }
+      );
+    }
+    
+    console.log('Supabase admin client authenticated successfully');
+    
     // Check if user already exists
-    const { data: existingUsers } = await supabaseAdmin
+    console.log('Checking if user already exists with wallet address:', wallet_address);
+    const { data: existingUsers, error: queryError } = await supabaseAdmin
       .from('users')
       .select('*')
       .ilike('wallet_address', wallet_address)
       .limit(1);
+    
+    if (queryError) {
+      console.error('Error querying existing users:', queryError);
+      return NextResponse.json(
+        { error: 'Database query error', details: queryError },
+        { status: 500 }
+      );
+    }
       
     if (existingUsers && existingUsers.length > 0) {
+      console.log('User already exists:', existingUsers[0]);
       return NextResponse.json(
         { message: 'User already exists', user: existingUsers[0] },
         { status: 200 }
       );
     }
     
-    // Create direct database entry for user with a generated UUID
-    const userId = generateUUID();
+    console.log('No existing user found, creating new auth user...');
     
-    // For admin operations, you'd typically need to:
-    // 1. Create an auth user first (if your schema requires it)
-    // 2. Then create the user in your public schema
+    // Step 1: Create an auth user first (critical for proper referencing)
+    const randomEmail = `${wallet_address.toLowerCase().substring(2, 8)}_${Date.now()}@orbuser.example`;
+    const randomPassword = `Password!${Math.random().toString(36).substring(2, 10)}`;
     
-    // Optional: Create auth user first (if needed)
-    /*
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: `${wallet_address.toLowerCase()}_${Date.now()}@example.com`,
-      password: `Password!${Math.random().toString(36).substring(2, 10)}`,
+      email: randomEmail,
+      password: randomPassword,
+      email_confirm: true, // Auto-confirm the email
       user_metadata: {
         wallet_address: wallet_address.toLowerCase(),
         username: username || 'worldapp_user'
@@ -75,17 +112,23 @@ export async function POST(request: Request) {
       );
     }
     
-    const authUserId = authUser.user.id;
-    */
+    if (!authUser || !authUser.user) {
+      return NextResponse.json(
+        { error: 'Failed to create auth user, no user returned' },
+        { status: 500 }
+      );
+    }
     
-    // For now, we'll insert directly and use our generated UUID
-    // This might not work if there are foreign key constraints
-    // If it fails, you'll need to use the commented out code above
+    const authUserId = authUser.user.id;
+    console.log('Created auth user with ID:', authUserId);
+    
+    // Step 2: Now use the auth user ID to create the profile in the users table
+    console.log('Inserting user profile into users table with ID:', authUserId);
     const { data: newUser, error: insertError } = await supabaseAdmin
       .from('users')
       .insert([
         { 
-          id: userId,
+          id: authUserId, // Use the Supabase Auth ID as the primary key
           wallet_address: wallet_address.toLowerCase(),
           username: username || 'worldapp_user'
         }
@@ -95,11 +138,29 @@ export async function POST(request: Request) {
       
     if (insertError) {
       console.error('Error creating user in database:', insertError);
+      
+      // Attempt to clean up the auth user if profile creation failed
+      try {
+        console.log('Cleaning up auth user after profile creation error...');
+        await supabaseAdmin.auth.admin.deleteUser(authUserId);
+      } catch (cleanupError) {
+        console.error('Failed to clean up auth user after profile creation error:', cleanupError);
+      }
+      
       return NextResponse.json(
-        { error: 'Failed to create user', details: insertError },
+        { error: 'Failed to create user profile', details: insertError },
         { status: 500 }
       );
     }
+    
+    if (!newUser) {
+      return NextResponse.json(
+        { error: 'User was created but no data was returned' },
+        { status: 500 }
+      );
+    }
+    
+    console.log('Successfully created new user:', newUser);
     
     return NextResponse.json(
       { message: 'User created successfully', user: newUser },

@@ -20,7 +20,10 @@ This guide will walk you through setting up Supabase for your ORB Lotto applicat
 ```
 NEXT_PUBLIC_SUPABASE_URL=your_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
+
+> **Important**: The `SUPABASE_SERVICE_ROLE_KEY` is required for user creation and admin operations. This key has full access to your database, so keep it secure and never expose it to the client.
 
 ## 3. Run Database Migrations
 
@@ -104,6 +107,55 @@ Supabase automatically handles backups of your database. However, it's recommend
 1. Regularly export important data
 2. Monitor database size and performance
 3. Set up alerts for any issues
+
+## Troubleshooting
+
+If you're having issues with Supabase integration, try these steps:
+
+### Check Your Environment Variables
+
+Run the provided script to verify your Supabase configuration:
+
+```bash
+npm run check-supabase
+```
+
+This will test your connection and identify common configuration issues.
+
+### Common Issues and Solutions
+
+1. **User data not being saved to the database**:
+   - Ensure your `SUPABASE_SERVICE_ROLE_KEY` is correctly set in `.env.local`
+   - Check that the auth user creation is working properly
+   - Verify the database schema matches what's expected
+
+2. **"Error: Failed to create auth user"**:
+   - This typically means your service role key doesn't have the necessary permissions
+   - Verify the key in your Supabase dashboard
+   - Try generating a new service role key
+
+3. **"RLS policy violation"**:
+   - Your Row Level Security policies may be too restrictive
+   - Check the RLS policies in the Supabase dashboard
+   - Use the service role key for admin operations
+
+4. **Client-side state issues**:
+   - Clear your browser's localStorage and cookies
+   - Try the clean development server:
+   ```bash
+   npm run dev:clean
+   ```
+
+5. **Database schema mismatch**:
+   - Verify all migrations have been applied correctly
+   - Check the Supabase dashboard to confirm tables exist with correct structures
+
+### Checking Logs
+
+For detailed error information:
+1. Check your browser console for client-side errors
+2. Look at the server logs in your terminal
+3. Review the Supabase logs in the dashboard under "Database" > "Logs"
 
 ## Getting Help
 

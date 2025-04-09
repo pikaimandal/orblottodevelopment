@@ -103,26 +103,11 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         
-        // If user doesn't exist, we need a workaround
-        console.log('User not found, creating temporary client-side user');
+        // If user doesn't exist, create a new one via the API
+        console.log('User not found, creating new user via API');
         
-        // Create a temporary client-side user that's not in the database
-        // This bypasses the database constraints while allowing the app to function
-        const tempUserId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
-        const tempUser = {
-          id: tempUserId,
-          wallet_address: walletAddress.toLowerCase(),
-          username: username || 'worldapp_user',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        setUser(tempUser as User);
-        console.log('Using client-side user object:', tempUser);
-        
-        // Attempt to create a user record through API for the future
-        // This is fire-and-forget - we don't wait for it to complete
-        fetch('/api/users/create', {
+        // Instead of using fire-and-forget, properly await the response
+        const response = await fetch('/api/users/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -131,17 +116,33 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
             wallet_address: walletAddress.toLowerCase(),
             username: username || 'worldapp_user'
           })
-        })
-        .then(response => {
-          if (response.ok) {
-            console.log('Background user creation request sent successfully');
-          } else {
-            console.log('Background user creation request failed');
-          }
-        })
-        .catch(error => {
-          console.error('Error sending background user creation request:', error);
         });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to create user: ${response.status} ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log('User creation API response:', result);
+        
+        if (result.user) {
+          // Set the user from the API response
+          setUser(result.user);
+          console.log('User created and set from API response:', result.user);
+        } else {
+          // Fallback to temporary user if needed
+          const tempUserId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+          const tempUser = {
+            id: tempUserId,
+            wallet_address: walletAddress.toLowerCase(),
+            username: username || 'worldapp_user',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          setUser(tempUser as User);
+          console.log('Using client-side user object as fallback:', tempUser);
+        }
       } catch (error) {
         console.error('Error in user management:', error);
         

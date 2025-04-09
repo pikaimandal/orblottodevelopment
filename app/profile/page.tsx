@@ -30,9 +30,24 @@ export default function ProfilePage() {
         console.log('Wallet is connected but user not in Supabase, creating user...');
         
         try {
-          // Create the user in Supabase using our updated context
-          await signIn(walletAddress, username);
-          console.log('User created/found in Supabase');
+          // First check if user exists by wallet address
+          const existingUser = await getUserByWalletAddress(walletAddress);
+          
+          if (existingUser) {
+            console.log('User found by wallet address in database:', existingUser);
+            setUser(existingUser);
+          } else {
+            // Create the user in Supabase using our updated context
+            await signIn(walletAddress, username);
+            console.log('User created in Supabase');
+            
+            // Fetch the user data again to ensure we have the latest
+            const createdUser = await getUserByWalletAddress(walletAddress);
+            if (createdUser) {
+              console.log('Retrieved newly created user:', createdUser);
+              setUser(createdUser);
+            }
+          }
         } catch (error) {
           console.error('Error synchronizing wallet with Supabase:', error);
           toast({
@@ -68,7 +83,11 @@ export default function ProfilePage() {
       
       console.log('Wallet connected successfully, wallet address:', walletAddress);
       
-      // Then create/update the user in Supabase (will happen in the useEffect)
+      // If we already have a user in context, refresh the data
+      if (user) {
+        await refreshUser();
+      }
+      // Otherwise the useEffect will handle user creation
     } catch (error) {
       console.error("Error connecting wallet:", error);
       toast({

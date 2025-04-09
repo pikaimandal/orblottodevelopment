@@ -46,12 +46,17 @@ export default function BuyPage() {
           const existingUser = await getUserByWalletAddress(walletAddress);
           
           if (existingUser) {
-            console.log('Buy page: User found by wallet address, refreshing user data');
+            console.log('Buy page: User found by wallet address in database:', existingUser);
+            // Use the signIn method which will set the user internally
+            await signIn(walletAddress, username);
             await refreshUser();
           } else {
             console.log('Buy page: Creating new user with wallet:', walletAddress);
             // Create the user in Supabase
             await signIn(walletAddress, username);
+            
+            // Refresh user data after creation
+            await refreshUser();
           }
         } catch (error) {
           console.error('Buy page: Error synchronizing wallet with Supabase:', error);
@@ -304,8 +309,8 @@ export default function BuyPage() {
                 </>
               ) : (
                 <>
-                  <Wallet className="h-4 w-4" />
-                  Connect WorldWallet
+              <Wallet className="h-4 w-4" />
+              Connect WorldWallet
                 </>
               )}
             </Button>
@@ -334,14 +339,14 @@ export default function BuyPage() {
 
           <div className="grid gap-6">
             {generatedTickets.length > 0 ? (
-              <Card>
-                <CardHeader>
+            <Card>
+              <CardHeader>
                   <CardTitle>Your Generated Tickets</CardTitle>
-                  <CardDescription>
+                <CardDescription>
                     These are your newly purchased ORB Lotto tickets
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
                   <div className="space-y-2">
                     {generatedTickets.map((ticket, index) => (
                       <div key={index} className="flex items-center p-2 border rounded-md bg-muted/50">
@@ -355,13 +360,13 @@ export default function BuyPage() {
                       Transaction ID: <code className="font-mono">{transactionId}</code>
                     </div>
                   )}
-                </CardContent>
-                <CardFooter>
+              </CardContent>
+              <CardFooter>
                   <Button className="w-full" onClick={() => setGeneratedTickets([])}>
                     Buy More Tickets
-                  </Button>
-                </CardFooter>
-              </Card>
+                </Button>
+              </CardFooter>
+            </Card>
             ) : (
               <Card>
                 <CardHeader>
@@ -472,7 +477,7 @@ export default function BuyPage() {
                 </CardFooter>
               </Card>
             )}
-          </div>
+            </div>
         </>
       )}
     </div>
