@@ -28,6 +28,7 @@ export default function BuyPage() {
   const [generatedTickets, setGeneratedTickets] = useState<string[]>([])
   const [currency, setCurrency] = useState<"WLD" | "USDC">("WLD")
   const [isProcessing, setIsProcessing] = useState(false)
+  const [transactionId, setTransactionId] = useState<string | null>(null)
 
   const getLottoTitle = (amount: number) => {
     switch (amount) {
@@ -64,8 +65,12 @@ export default function BuyPage() {
           description: "This feature requires WorldApp to work properly",
           variant: "destructive"
         })
-        // Fall back to simulated mode for development
-        simulateTicketGeneration()
+        
+        if (process.env.NODE_ENV !== "production") {
+          // Fall back to simulated mode for development
+          simulateTicketGeneration()
+        }
+        
         setIsProcessing(false)
         return
       }
@@ -84,50 +89,92 @@ export default function BuyPage() {
       })
       
       if (!initRes.ok) {
-        throw new Error("Failed to initiate payment")
+        const errorData = await initRes.json()
+        throw new Error(errorData.error || "Failed to initiate payment")
       }
       
       const paymentData = await initRes.json()
+      console.log("Payment initiated:", paymentData)
       
-      // 2. Send payment command to World App
-      // Using type assertion to bypass TypeScript errors since the docs may be ahead of the types
-      const { commandPayload, finalPayload } = await MiniKit.commandsAsync.pay({
-        id: paymentData.paymentId,
-        amount: paymentData.amount.toString(),
-        token: currency,
-        recipient: paymentData.recipientAddress,
-      } as any)
-      
-      // 3. Check if payment was successful
-      if (finalPayload.status === "error") {
-        throw new Error("Payment failed")
-      }
-      
-      // 4. Verify payment with backend
-      const verifyRes = await fetch("/api/verify-payment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          paymentId: paymentData.paymentId,
-          transactionId: finalPayload.transaction_id
+      // 2. Send payment command to World App - EXACTLY as per documentation
+      try {
+        // Configure payment params exactly as required by WorldApp documentation
+        const { finalPayload, commandPayload } = await MiniKit.commandsAsync.pay({
+          // Important: using 'any' type to bypass TypeScript errors
+          // since MiniKit docs may be ahead of TypeScript definitions
+          id: paymentData.paymentId,
+          token: currency,
+          recipient: paymentData.recipientAddress,
+          amount: paymentData.amount.toString()
+        } as any)
+        
+        console.log("Payment result:", { finalPayload, commandPayload })
+        
+        // 3. Error handling specifically for payment failures
+        if (!finalPayload || finalPayload.status === "error") {
+          // We need to handle different error scenarios from the payment system
+          // Safely access error properties with type assertion since API might return fields
+          // that aren't in the type definitions
+          const errorPayload = finalPayload as any;
+          const errorMessage = errorPayload?.error_message || errorPayload?.code || "Unknown payment error"
+          console.error("Payment failed:", errorMessage)
+          
+          if (errorMessage.includes("insufficient") || errorMessage.includes("balance")) {
+            throw new Error("Insufficient funds to complete this transaction. Please add funds to your wallet.")
+          } else if (errorMessage.includes("rejected") || errorMessage.includes("denied")) {
+            throw new Error("Payment was rejected by the user.")
+          } else {
+            throw new Error(`Payment failed: ${errorMessage}`)
+          }
+        }
+        
+        // Store transaction ID for reference
+        setTransactionId(finalPayload.transaction_id)
+        
+        // 4. Verify payment with backend
+        const verifyRes = await fetch("/api/verify-payment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            paymentId: paymentData.paymentId,
+            transactionId: finalPayload.transaction_id
+          })
         })
-      })
-      
-      if (!verifyRes.ok) {
-        throw new Error("Failed to verify payment")
+        
+        if (!verifyRes.ok) {
+          const errorData = await verifyRes.json()
+          throw new Error(errorData.error || "Failed to verify payment")
+        }
+        
+        const verifyData = await verifyRes.json()
+        
+        // 5. Generate tickets after successful payment
+        // Note: In production, these would come from the verify endpoint
+        const tickets = verifyData.tickets?.map((t: any) => t.number) || 
+          Array.from({ length: ticketCount }, () => generateTicketNumber())
+          
+        setGeneratedTickets(tickets)
+        
+        // Show success toast
+        toast({
+          title: "Purchase successful!",
+          description: `You purchased ${ticketCount} ${getLottoTitle(selectedAmount)} tickets`,
+          variant: "default"
+        })
+      } catch (error: any) {
+        console.error("Payment command error:", error)
+        
+        // Specific error handling for payment issues
+        if (error.message?.includes("user_rejected") || error.message?.includes("rejected")) {
+          throw new Error("Payment was rejected by the user")
+        } else if (error.message?.includes("insufficient") || error.message?.includes("balance")) {
+          throw new Error("Insufficient funds to complete this transaction")
+        } else {
+          throw error
+        }
       }
-      
-      // 5. Generate tickets after successful payment
-      const tickets = Array.from({ length: ticketCount }, () => generateTicketNumber())
-      setGeneratedTickets(tickets)
-      
-      toast({
-        title: "Purchase successful!",
-        description: `You purchased ${ticketCount} ${getLottoTitle(selectedAmount)} tickets`,
-        variant: "default"
-      })
       
     } catch (error: any) {
       console.error("Error purchasing tickets:", error)
@@ -137,7 +184,7 @@ export default function BuyPage() {
         variant: "destructive"
       })
       
-      // Fallback for development
+      // Fallback for development only
       if (process.env.NODE_ENV !== "production") {
         simulateTicketGeneration()
       }
@@ -306,6 +353,18 @@ export default function BuyPage() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+          )}
+          
+          {transactionId && (
+            <div className="mt-4">
+              <Alert variant="default">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Transaction ID</AlertTitle>
+                <AlertDescription className="break-all font-mono text-xs">
+                  {transactionId}
+                </AlertDescription>
+              </Alert>
             </div>
           )}
         </>
