@@ -84,13 +84,19 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       console.log('Signing in with wallet address:', walletAddress);
       
+      // Normalize wallet address - strip out any dev mode text
+      const normalizedWalletAddress = walletAddress
+        .toLowerCase()
+        .replace(/\s*\(dev\s*mode\)\s*/i, '')
+        .trim();
+      
       // First, check if user exists with this wallet address in our users table
       try {
         // Check if user exists first with a direct query
         const { data: existingUsers, error: selectError } = await supabase
           .from('users')
           .select('*')
-          .ilike('wallet_address', walletAddress)
+          .ilike('wallet_address', normalizedWalletAddress)
           .limit(1);
         
         if (selectError) {
@@ -113,7 +119,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            wallet_address: walletAddress.toLowerCase(),
+            wallet_address: normalizedWalletAddress,
             username: username || 'worldapp_user'
           })
         });
@@ -130,11 +136,17 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
           setUser(result.user);
           console.log('User created and set from API response:', result.user);
         } else {
-          // Fallback to temporary user if needed
-          const tempUserId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+          // Fallback to temporary user if needed - using proper UUID format
+          const tempUserId = crypto.randomUUID ? crypto.randomUUID() : 
+            'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+              const r = Math.random() * 16 | 0;
+              const v = c === 'x' ? r : (r & 0x3 | 0x8);
+              return v.toString(16);
+            });
+          
           const tempUser = {
             id: tempUserId,
-            wallet_address: walletAddress.toLowerCase(),
+            wallet_address: normalizedWalletAddress,
             username: username || 'worldapp_user',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -146,10 +158,17 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('Error in user management:', error);
         
-        // Create a temporary client-side user
+        // Create a temporary client-side user with proper UUID format
+        const tempUserId = crypto.randomUUID ? crypto.randomUUID() : 
+          'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+        
         const tempUser = {
-          id: 'temp_' + Math.random().toString(36).substring(2, 15),
-          wallet_address: walletAddress.toLowerCase(),
+          id: tempUserId,
+          wallet_address: normalizedWalletAddress,
           username: username || 'worldapp_user',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()

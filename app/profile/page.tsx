@@ -31,22 +31,25 @@ export default function ProfilePage() {
         
         try {
           // First check if user exists by wallet address
-          const existingUser = await getUserByWalletAddress(walletAddress);
+          // Normalize wallet address - strip out any dev mode text
+          const normalizedWalletAddress = walletAddress
+            .toLowerCase()
+            .replace(/\s*\(dev\s*mode\)\s*/i, '')
+            .trim();
+          
+          const existingUser = await getUserByWalletAddress(normalizedWalletAddress);
           
           if (existingUser) {
             console.log('User found by wallet address in database:', existingUser);
-            setUser(existingUser);
+            // We'll use the signIn method to set the user in context
+            await signIn(walletAddress, username);
           } else {
             // Create the user in Supabase using our updated context
             await signIn(walletAddress, username);
             console.log('User created in Supabase');
             
-            // Fetch the user data again to ensure we have the latest
-            const createdUser = await getUserByWalletAddress(walletAddress);
-            if (createdUser) {
-              console.log('Retrieved newly created user:', createdUser);
-              setUser(createdUser);
-            }
+            // No need to manually set user as signIn will do it
+            await refreshUser();
           }
         } catch (error) {
           console.error('Error synchronizing wallet with Supabase:', error);
@@ -62,7 +65,7 @@ export default function ProfilePage() {
     };
 
     syncWalletWithSupabase();
-  }, [isConnected, walletAddress, user, loading, username, signIn, isCreatingUser]);
+  }, [isConnected, walletAddress, user, loading, username, signIn, isCreatingUser, refreshUser]);
 
   // Connect wallet function using supabase
   const handleConnectWallet = async () => {

@@ -7,10 +7,16 @@ import type { User, Ticket, Draw, Transaction, TicketType } from '@/types/supaba
  * Get user profile by wallet address
  */
 export async function getUserByWalletAddress(walletAddress: string): Promise<User | null> {
+  // Normalize wallet address - strip out any dev mode text
+  const normalizedWalletAddress = walletAddress
+    .toLowerCase()
+    .replace(/\s*\(dev\s*mode\)\s*/i, '')
+    .trim();
+  
   const { data, error } = await supabase
     .from('users')
     .select('*')
-    .eq('wallet_address', walletAddress)
+    .ilike('wallet_address', normalizedWalletAddress)
     .single();
 
   if (error) {

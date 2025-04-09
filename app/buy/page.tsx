@@ -42,8 +42,14 @@ export default function BuyPage() {
         console.log('Buy page: Wallet is connected but user not in Supabase, creating user...');
         
         try {
+          // Normalize wallet address - strip out any dev mode text
+          const normalizedWalletAddress = walletAddress
+            .toLowerCase()
+            .replace(/\s*\(dev\s*mode\)\s*/i, '')
+            .trim();
+          
           // Try to see if the user exists by wallet address first
-          const existingUser = await getUserByWalletAddress(walletAddress);
+          const existingUser = await getUserByWalletAddress(normalizedWalletAddress);
           
           if (existingUser) {
             console.log('Buy page: User found by wallet address in database:', existingUser);
