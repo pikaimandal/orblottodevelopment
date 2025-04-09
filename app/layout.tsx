@@ -5,6 +5,7 @@ import "./globals.css"
 import { Navbar } from "@/components/navbar"
 import MiniKitProvider from "@/components/minikit-provider"
 import { MinikitStatus } from "@/components/minikit-status"
+import { SupabaseProvider } from "@/contexts/SupabaseContext"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -23,13 +24,15 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} bg-background min-h-screen`}>
         <MiniKitProvider>
-          <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" disableTransitionOnChange>
-            <div className="flex flex-col min-h-screen max-w-md mx-auto border-x border-border">
-              <Navbar />
-              <main className="flex-1">{children}</main>
-              <MinikitStatus />
-            </div>
-          </ThemeProvider>
+          <SupabaseProvider>
+            <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" disableTransitionOnChange>
+              <div className="flex flex-col min-h-screen max-w-md mx-auto border-x border-border">
+                <Navbar />
+                <main className="flex-1">{children}</main>
+                <MinikitStatus />
+              </div>
+            </ThemeProvider>
+          </SupabaseProvider>
         </MiniKitProvider>
       </body>
     </html>
