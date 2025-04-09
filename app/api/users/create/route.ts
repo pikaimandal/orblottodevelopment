@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { v4 as uuidv4 } from 'uuid';
+
+// Function to generate UUID without external dependency
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 export async function POST(request: Request) {
   try {
@@ -42,7 +50,7 @@ export async function POST(request: Request) {
     }
     
     // Create direct database entry for user with a generated UUID
-    const userId = uuidv4();
+    const userId = generateUUID();
     
     // For admin operations, you'd typically need to:
     // 1. Create an auth user first (if your schema requires it)
