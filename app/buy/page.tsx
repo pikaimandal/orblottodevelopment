@@ -86,14 +86,23 @@ export default function BuyPage() {
 
   const handleConnectWallet = async () => {
     try {
+      if (isConnecting || isCreatingUser) {
+        console.log('Already in connection process, ignoring duplicate request');
+        return;
+      }
+      
       // First connect the wallet
       await connectWallet();
       
-      // Then create/update the user in Supabase
-      if (walletAddress) {
-        console.log('Buy page: Wallet connected, signing in to Supabase with:', walletAddress);
-        await signIn(walletAddress, username);
+      // Check if we have a wallet address after connection
+      if (!walletAddress) {
+        console.log('Buy page: Wallet connection failed or was rejected');
+        return;
       }
+      
+      console.log('Buy page: Wallet connected successfully, wallet address:', walletAddress);
+      
+      // Then create/update the user in Supabase (will happen in the useEffect)
     } catch (error) {
       console.error("Error connecting wallet:", error);
       toast({
@@ -395,53 +404,68 @@ export default function BuyPage() {
                     
                     <div>
                       <Label htmlFor="quantity">Number of Tickets</Label>
-                      <div className="flex gap-2 mt-2">
-                        <Input 
-                          id="quantity" 
-                          type="number" 
-                          min="1" 
-                          max="50"
-                          value={ticketCount}
-                          onChange={(e) => setTicketCount(Math.min(50, Math.max(1, parseInt(e.target.value) || 1)))}
-                        />
-                        <Select value={currency} onValueChange={(value: "WLD" | "USDC") => setCurrency(value)}>
-                          <SelectTrigger className="w-[110px]">
-                            <SelectValue placeholder="WLD" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="WLD">WLD</SelectItem>
-                            <SelectItem value="USDC">USDC</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      <Input 
+                        id="quantity" 
+                        type="number" 
+                        min="1" 
+                        max="50"
+                        value={ticketCount}
+                        onChange={(e) => setTicketCount(Math.min(50, Math.max(1, parseInt(e.target.value) || 1)))}
+                        className="mt-2"
+                      />
                     </div>
                     
                     <div className="bg-muted p-3 rounded-md">
                       <div className="flex justify-between items-center">
                         <span>Total Cost:</span>
-                        <span className="font-bold">{ticketCount * selectedAmount} {currency}</span>
+                        <span className="font-bold">${ticketCount * selectedAmount}</span>
                       </div>
                     </div>
                   </div>
                 </CardContent>
                 <CardFooter className="flex flex-col gap-2">
-                  <Button 
-                    className="w-full gap-2" 
-                    onClick={handleBuyTickets}
-                    disabled={isProcessing}
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <CreditCard className="h-4 w-4" />
-                        Buy Tickets with {currency}
-                      </>
-                    )}
-                  </Button>
+                  <div className="grid grid-cols-2 gap-3 w-full">
+                    <Button 
+                      className="w-full gap-2" 
+                      onClick={() => {
+                        setCurrency("WLD");
+                        handleBuyTickets();
+                      }}
+                      disabled={isProcessing}
+                    >
+                      {isProcessing && currency === "WLD" ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <Wallet className="h-4 w-4" />
+                          Buy with WLD
+                        </>
+                      )}
+                    </Button>
+                    <Button 
+                      className="w-full gap-2" 
+                      onClick={() => {
+                        setCurrency("USDC");
+                        handleBuyTickets();
+                      }}
+                      disabled={isProcessing}
+                    >
+                      {isProcessing && currency === "USDC" ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="h-4 w-4" />
+                          Buy with USDC
+                        </>
+                      )}
+                    </Button>
+                  </div>
                   <p className="text-xs text-muted-foreground text-center">
                     Tickets will be randomly generated for the next available draw.
                   </p>

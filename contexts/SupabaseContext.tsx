@@ -84,82 +84,56 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       console.log('Signing in with wallet address:', walletAddress);
       
-      // Generate a JWT token for this wallet address
-      // In production, this should be signed properly
-      const jwt = btoa(JSON.stringify({
-        sub: walletAddress,
-        wallet_address: walletAddress,
-        username: username || 'worldapp_user'
-      }));
+      // First, try to check if user exists with this wallet address in our users table
+      // regardless of auth status
+      try {
+        const { data: existingUsers } = await supabase
+          .from('users')
+          .select('*')
+          .eq('wallet_address', walletAddress.toLowerCase());
+          
+        if (existingUsers && existingUsers.length > 0) {
+          console.log('Found existing user by wallet address:', existingUsers[0]);
+          setUser(existingUsers[0]);
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking for existing user:', error);
+        // Continue with creation even if this check fails
+      }
       
-      // Sign in with the JWT
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: `${walletAddress.toLowerCase()}@example.com`,
-        password: 'password123' // This is just a placeholder; in production you'd use proper auth
-      });
-
-      if (error) {
-        console.error('Supabase auth error:', error);
+      // If we couldn't find the user, create a new one with a direct DB insert
+      try {
+        // Generate a UUID for the user
+        const userId = crypto.randomUUID ? crypto.randomUUID() : 
+          'user_' + Math.random().toString(36).substring(2, 15);
         
-        // If sign-in fails, try to sign up instead
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: `${walletAddress.toLowerCase()}@example.com`,
-          password: 'password123',
-          options: {
-            data: {
-              wallet_address: walletAddress,
-              username: username || 'worldapp_user'
+        // Create the user with a direct insert
+        const { data: newUser, error: insertError } = await supabase
+          .from('users')
+          .insert([
+            { 
+              id: userId,
+              wallet_address: walletAddress.toLowerCase(),
+              username: username || 'worldapp_user',
+              created_at: new Date().toISOString()
             }
-          }
-        });
-        
-        if (signUpError) {
-          console.error('Supabase sign-up error:', signUpError);
-          throw signUpError;
-        }
-        
-        // If we've signed up successfully, store the session
-        if (signUpData?.session) {
-          setSession(signUpData.session);
+          ])
+          .select()
+          .single();
+          
+        if (insertError) {
+          console.error('Error creating user:', insertError);
+          throw insertError;
         }
         
-        // If we have a user, make sure they exist in our users table
-        if (signUpData?.user) {
-          // Directly create the user in our table, regardless of auth hook
-          const userData = await upsertUser({
-            id: signUpData.user.id,
-            wallet_address: walletAddress,
-            username: username || 'worldapp_user'
-          });
-          
-          if (userData) {
-            setUser(userData);
-          }
+        if (newUser) {
+          console.log('Created new user:', newUser);
+          setUser(newUser);
         }
-      } else {
-        // Sign-in succeeded, update user metadata
-        if (data?.user) {
-          await supabase.auth.updateUser({
-            data: {
-              wallet_address: walletAddress,
-              username: username || 'worldapp_user'
-            }
-          });
-          
-          // Directly create/update the user in our table, regardless of auth hook
-          const userData = await upsertUser({
-            id: data.user.id,
-            wallet_address: walletAddress,
-            username: username || 'worldapp_user'
-          });
-          
-          if (userData) {
-            setUser(userData);
-          } else if (data.session) {
-            // If we couldn't upsert directly, at least try to fetch the user
-            await fetchUser(data.user.id);
-          }
-        }
+      } catch (insertError) {
+        console.error('Error creating new user:', insertError);
+        throw insertError;
       }
     } catch (error) {
       console.error('Error signing in:', error);

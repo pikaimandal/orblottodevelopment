@@ -30,17 +30,9 @@ export default function ProfilePage() {
         console.log('Wallet is connected but user not in Supabase, creating user...');
         
         try {
-          // Try to see if the user exists by wallet address first
-          const existingUser = await getUserByWalletAddress(walletAddress);
-          
-          if (existingUser) {
-            console.log('User found by wallet address, refreshing user data');
-            await refreshUser();
-          } else {
-            console.log('Creating new user with wallet:', walletAddress);
-            // Create the user in Supabase
-            await signIn(walletAddress, username);
-          }
+          // Create the user in Supabase using our updated context
+          await signIn(walletAddress, username);
+          console.log('User created/found in Supabase');
         } catch (error) {
           console.error('Error synchronizing wallet with Supabase:', error);
           toast({
@@ -55,19 +47,28 @@ export default function ProfilePage() {
     };
 
     syncWalletWithSupabase();
-  }, [isConnected, walletAddress, user, loading, username, signIn, refreshUser, isCreatingUser]);
+  }, [isConnected, walletAddress, user, loading, username, signIn, isCreatingUser]);
 
   // Connect wallet function using supabase
   const handleConnectWallet = async () => {
     try {
+      if (isConnecting || isCreatingUser) {
+        console.log('Already in connection process, ignoring duplicate request');
+        return;
+      }
+      
       // First connect the wallet
       await connectWallet();
       
-      // Then create/update the user in Supabase
-      if (walletAddress) {
-        console.log('Wallet connected, signing in to Supabase with:', walletAddress);
-        await signIn(walletAddress, username);
+      // Check if we have a wallet address after connection
+      if (!walletAddress) {
+        console.log('Wallet connection failed or was rejected');
+        return;
       }
+      
+      console.log('Wallet connected successfully, wallet address:', walletAddress);
+      
+      // Then create/update the user in Supabase (will happen in the useEffect)
     } catch (error) {
       console.error("Error connecting wallet:", error);
       toast({
