@@ -7,28 +7,74 @@ import { formatWalletAddress } from "@/lib/utils"
 import { useSupabase } from "@/contexts/SupabaseContext"
 import { useWalletStore } from "@/lib/store"
 import { useEffect, useState } from "react"
-import { getUserTickets, getUserTransactions } from "@/utils/supabase-utils"
+import { getUserByWalletAddress, getUserTickets, getUserTransactions } from "@/utils/supabase-utils"
 import type { Ticket as TicketType, Transaction } from "@/types/supabase"
+import { toast } from "@/components/ui/use-toast"
 
 export default function ProfilePage() {
   const { isConnected, isConnecting, walletAddress, username, connectWallet, disconnectWallet } = useWalletStore()
-  const { user, loading, signIn, signOut } = useSupabase()
+  const { user, loading, signIn, signOut, refreshUser } = useSupabase()
   
   const [tickets, setTickets] = useState<TicketType[]>([])
   const [winnings, setWinnings] = useState<Transaction[]>([])
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [totalTickets, setTotalTickets] = useState(0)
   const [totalWon, setTotalWon] = useState(0)
+  const [isCreatingUser, setIsCreatingUser] = useState(false)
+
+  // Effect to handle synchronization between wallet connection and Supabase auth
+  useEffect(() => {
+    const syncWalletWithSupabase = async () => {
+      if (isConnected && walletAddress && !user && !loading && !isCreatingUser) {
+        setIsCreatingUser(true);
+        console.log('Wallet is connected but user not in Supabase, creating user...');
+        
+        try {
+          // Try to see if the user exists by wallet address first
+          const existingUser = await getUserByWalletAddress(walletAddress);
+          
+          if (existingUser) {
+            console.log('User found by wallet address, refreshing user data');
+            await refreshUser();
+          } else {
+            console.log('Creating new user with wallet:', walletAddress);
+            // Create the user in Supabase
+            await signIn(walletAddress, username);
+          }
+        } catch (error) {
+          console.error('Error synchronizing wallet with Supabase:', error);
+          toast({
+            title: "Authentication Error",
+            description: "Failed to synchronize your wallet with your profile",
+            variant: "destructive"
+          });
+        } finally {
+          setIsCreatingUser(false);
+        }
+      }
+    };
+
+    syncWalletWithSupabase();
+  }, [isConnected, walletAddress, user, loading, username, signIn, refreshUser, isCreatingUser]);
 
   // Connect wallet function using supabase
   const handleConnectWallet = async () => {
     try {
+      // First connect the wallet
       await connectWallet();
+      
+      // Then create/update the user in Supabase
       if (walletAddress) {
+        console.log('Wallet connected, signing in to Supabase with:', walletAddress);
         await signIn(walletAddress, username);
       }
     } catch (error) {
       console.error("Error connecting wallet:", error);
+      toast({
+        title: "Connection Failed",
+        description: "Could not connect your wallet. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -77,6 +123,18 @@ export default function ProfilePage() {
     fetchUserData();
   }, [user?.id]);
 
+  // Debug output to check state
+  console.log('Profile state:', { 
+    isConnected, 
+    walletAddress, 
+    userLoaded: !!user, 
+    loading, 
+    isCreatingUser
+  });
+
+  // Determine if we're loading anything
+  const isAnyLoading = loading || isConnecting || isCreatingUser;
+
   return (
     <div className="container py-6 pb-20">
       <h1 className="text-2xl font-bold mb-6">Profile</h1>
@@ -91,9 +149,9 @@ export default function ProfilePage() {
             <Button 
               onClick={handleConnectWallet} 
               className="gap-2"
-              disabled={isConnecting || loading}
+              disabled={isAnyLoading}
             >
-              {(isConnecting || loading) ? (
+              {isAnyLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Connecting...

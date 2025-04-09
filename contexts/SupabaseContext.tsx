@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@/types/supabase';
 import { Session } from '@supabase/supabase-js';
+import { upsertUser } from '@/utils/supabase-utils';
 
 type SupabaseContextType = {
   session: Session | null;
@@ -81,29 +82,84 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (walletAddress: string, username?: string) => {
     try {
       setLoading(true);
+      console.log('Signing in with wallet address:', walletAddress);
       
-      // In a real implementation, you would verify the wallet signature here
-      // For now, we'll just create a custom token
+      // Generate a JWT token for this wallet address
+      // In production, this should be signed properly
+      const jwt = btoa(JSON.stringify({
+        sub: walletAddress,
+        wallet_address: walletAddress,
+        username: username || 'worldapp_user'
+      }));
+      
+      // Sign in with the JWT
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: `${walletAddress}@example.com`, // This is a placeholder
-        password: 'password' // This is a placeholder, use proper auth in production
+        email: `${walletAddress.toLowerCase()}@example.com`,
+        password: 'password123' // This is just a placeholder; in production you'd use proper auth
       });
 
-      if (error) throw error;
-
-      // If this is a new user, add their wallet address and username to the user metadata
-      if (data?.user) {
-        await supabase.auth.updateUser({
-          data: {
-            wallet_address: walletAddress,
-            username: username || null
+      if (error) {
+        console.error('Supabase auth error:', error);
+        
+        // If sign-in fails, try to sign up instead
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: `${walletAddress.toLowerCase()}@example.com`,
+          password: 'password123',
+          options: {
+            data: {
+              wallet_address: walletAddress,
+              username: username || 'worldapp_user'
+            }
           }
         });
-      }
-
-      // Fetch the user data
-      if (data?.user) {
-        await fetchUser(data.user.id);
+        
+        if (signUpError) {
+          console.error('Supabase sign-up error:', signUpError);
+          throw signUpError;
+        }
+        
+        // If we've signed up successfully, store the session
+        if (signUpData?.session) {
+          setSession(signUpData.session);
+        }
+        
+        // If we have a user, make sure they exist in our users table
+        if (signUpData?.user) {
+          // Directly create the user in our table, regardless of auth hook
+          const userData = await upsertUser({
+            id: signUpData.user.id,
+            wallet_address: walletAddress,
+            username: username || 'worldapp_user'
+          });
+          
+          if (userData) {
+            setUser(userData);
+          }
+        }
+      } else {
+        // Sign-in succeeded, update user metadata
+        if (data?.user) {
+          await supabase.auth.updateUser({
+            data: {
+              wallet_address: walletAddress,
+              username: username || 'worldapp_user'
+            }
+          });
+          
+          // Directly create/update the user in our table, regardless of auth hook
+          const userData = await upsertUser({
+            id: data.user.id,
+            wallet_address: walletAddress,
+            username: username || 'worldapp_user'
+          });
+          
+          if (userData) {
+            setUser(userData);
+          } else if (data.session) {
+            // If we couldn't upsert directly, at least try to fetch the user
+            await fetchUser(data.user.id);
+          }
+        }
       }
     } catch (error) {
       console.error('Error signing in:', error);

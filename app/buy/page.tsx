@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,8 @@ import { Wallet, Ticket, AlertCircle, LogOut, Loader2, CreditCard } from "lucide
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { generateTicketNumber, formatWalletAddress } from "@/lib/utils"
 import { useWalletStore } from "@/lib/store"
+import { useSupabase } from "@/contexts/SupabaseContext"
+import { getUserByWalletAddress } from "@/utils/supabase-utils"
 import { 
   Select, 
   SelectContent, 
@@ -23,12 +25,49 @@ import { toast } from "@/components/ui/use-toast"
 
 export default function BuyPage() {
   const { isConnected, isConnecting, walletAddress, username, connectWallet, disconnectWallet } = useWalletStore()
+  const { user, loading, signIn, refreshUser } = useSupabase()
   const [ticketCount, setTicketCount] = useState(1)
   const [selectedAmount, setSelectedAmount] = useState(2)
   const [generatedTickets, setGeneratedTickets] = useState<string[]>([])
   const [currency, setCurrency] = useState<"WLD" | "USDC">("WLD")
   const [isProcessing, setIsProcessing] = useState(false)
   const [transactionId, setTransactionId] = useState<string | null>(null)
+  const [isCreatingUser, setIsCreatingUser] = useState(false)
+
+  // Effect to handle synchronization between wallet connection and Supabase auth
+  useEffect(() => {
+    const syncWalletWithSupabase = async () => {
+      if (isConnected && walletAddress && !user && !loading && !isCreatingUser) {
+        setIsCreatingUser(true);
+        console.log('Buy page: Wallet is connected but user not in Supabase, creating user...');
+        
+        try {
+          // Try to see if the user exists by wallet address first
+          const existingUser = await getUserByWalletAddress(walletAddress);
+          
+          if (existingUser) {
+            console.log('Buy page: User found by wallet address, refreshing user data');
+            await refreshUser();
+          } else {
+            console.log('Buy page: Creating new user with wallet:', walletAddress);
+            // Create the user in Supabase
+            await signIn(walletAddress, username);
+          }
+        } catch (error) {
+          console.error('Buy page: Error synchronizing wallet with Supabase:', error);
+          toast({
+            title: "Authentication Error",
+            description: "Failed to synchronize your wallet with your profile",
+            variant: "destructive"
+          });
+        } finally {
+          setIsCreatingUser(false);
+        }
+      }
+    };
+
+    syncWalletWithSupabase();
+  }, [isConnected, walletAddress, user, loading, username, signIn, refreshUser, isCreatingUser]);
 
   const getLottoTitle = (amount: number) => {
     switch (amount) {
@@ -44,6 +83,26 @@ export default function BuyPage() {
         return "ORB Lotto Basic"
     }
   }
+
+  const handleConnectWallet = async () => {
+    try {
+      // First connect the wallet
+      await connectWallet();
+      
+      // Then create/update the user in Supabase
+      if (walletAddress) {
+        console.log('Buy page: Wallet connected, signing in to Supabase with:', walletAddress);
+        await signIn(walletAddress, username);
+      }
+    } catch (error) {
+      console.error("Error connecting wallet:", error);
+      toast({
+        title: "Connection Failed",
+        description: "Could not connect your wallet. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
 
   const handleBuyTickets = async () => {
     if (!isConnected) {
@@ -201,6 +260,18 @@ export default function BuyPage() {
     setGeneratedTickets(tickets)
   }
 
+  // Determine if we're loading anything
+  const isAnyLoading = loading || isConnecting || isCreatingUser;
+
+  // Debug output to check state
+  console.log('Buy page state:', { 
+    isConnected, 
+    walletAddress, 
+    userLoaded: !!user, 
+    loading, 
+    isCreatingUser
+  });
+
   return (
     <div className="container py-6 pb-20">
       <h1 className="text-2xl font-bold mb-6">Buy Tickets</h1>
@@ -213,11 +284,11 @@ export default function BuyPage() {
           </CardHeader>
           <CardContent className="flex justify-center">
             <Button 
-              onClick={connectWallet} 
+              onClick={handleConnectWallet} 
               className="gap-2"
-              disabled={isConnecting}
+              disabled={isAnyLoading}
             >
-              {isConnecting ? (
+              {isAnyLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Connecting...
@@ -252,123 +323,132 @@ export default function BuyPage() {
             </div>
           </Alert>
 
-          <Tabs defaultValue="2" onValueChange={(value) => setSelectedAmount(Number(value))}>
-            <TabsList className="grid grid-cols-5 mb-6">
-              <TabsTrigger value="2">$2</TabsTrigger>
-              <TabsTrigger value="5">$5</TabsTrigger>
-              <TabsTrigger value="10">$10</TabsTrigger>
-              <TabsTrigger value="100">$100</TabsTrigger>
-              <TabsTrigger value="500">$500</TabsTrigger>
-            </TabsList>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>{getLottoTitle(selectedAmount)}</span>
-                  <Badge variant="outline">${selectedAmount}</Badge>
-                </CardTitle>
-                <CardDescription>
-                  Next draw: {new Date(Date.now() + 86400000).toLocaleDateString()} at 8:00 PM
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="ticketCount">Number of tickets (max 50)</Label>
-                    <Input
-                      id="ticketCount"
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={ticketCount}
-                      onChange={(e) => setTicketCount(Math.min(50, Math.max(1, Number.parseInt(e.target.value) || 1)))}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="currency">Payment Currency</Label>
-                    <Select value={currency} onValueChange={(value) => setCurrency(value as "WLD" | "USDC")}>
-                      <SelectTrigger id="currency">
-                        <SelectValue placeholder="Select currency" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="WLD">WLD</SelectItem>
-                        <SelectItem value="USDC">USDC</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="bg-muted p-3 rounded-md">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Price per ticket:</span>
-                      <span>${selectedAmount}</span>
-                    </div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Number of tickets:</span>
-                      <span>{ticketCount}</span>
-                    </div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Currency:</span>
-                      <span>{currency}</span>
-                    </div>
-                    <div className="flex justify-between font-medium">
-                      <span>Total:</span>
-                      <span>${selectedAmount * ticketCount}</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  onClick={handleBuyTickets} 
-                  className="w-full gap-2"
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="h-4 w-4" />
-                      Buy Tickets with {currency}
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          </Tabs>
-
-          {generatedTickets.length > 0 && (
-            <div className="mt-6">
-              <h2 className="text-lg font-semibold mb-2">Your Tickets</h2>
+          <div className="grid gap-6">
+            {generatedTickets.length > 0 ? (
               <Card>
-                <CardContent className="p-4">
+                <CardHeader>
+                  <CardTitle>Your Generated Tickets</CardTitle>
+                  <CardDescription>
+                    These are your newly purchased ORB Lotto tickets
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
                   <div className="space-y-2">
                     {generatedTickets.map((ticket, index) => (
-                      <div key={index} className="flex justify-between items-center py-2 border-b last:border-0">
-                        <div className="font-mono">{ticket}</div>
-                        <Badge variant="outline">${selectedAmount}</Badge>
+                      <div key={index} className="flex items-center p-2 border rounded-md bg-muted/50">
+                        <Ticket className="h-4 w-4 mr-2 text-primary" />
+                        <code className="font-mono">{ticket}</code>
                       </div>
                     ))}
                   </div>
+                  {transactionId && (
+                    <div className="mt-4 text-sm text-muted-foreground">
+                      Transaction ID: <code className="font-mono">{transactionId}</code>
+                    </div>
+                  )}
                 </CardContent>
+                <CardFooter>
+                  <Button className="w-full" onClick={() => setGeneratedTickets([])}>
+                    Buy More Tickets
+                  </Button>
+                </CardFooter>
               </Card>
-            </div>
-          )}
-          
-          {transactionId && (
-            <div className="mt-4">
-              <Alert variant="default">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Transaction ID</AlertTitle>
-                <AlertDescription className="break-all font-mono text-xs">
-                  {transactionId}
-                </AlertDescription>
-              </Alert>
-            </div>
-          )}
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Buy ORB Lotto Tickets</CardTitle>
+                  <CardDescription>Select your ticket type and quantity</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="ticket-type">Ticket Type</Label>
+                      <Tabs 
+                        defaultValue="2" 
+                        className="mt-2"
+                        onValueChange={(value) => setSelectedAmount(Number(value))}
+                      >
+                        <TabsList className="grid grid-cols-5 h-auto">
+                          <TabsTrigger value="2" className="flex flex-col py-2 px-0 h-auto">
+                            <span className="text-xs mb-1">Basic</span>
+                            <Badge>$2</Badge>
+                          </TabsTrigger>
+                          <TabsTrigger value="5" className="flex flex-col py-2 px-0 h-auto">
+                            <span className="text-xs mb-1">Plus</span>
+                            <Badge>$5</Badge>
+                          </TabsTrigger>
+                          <TabsTrigger value="10" className="flex flex-col py-2 px-0 h-auto">
+                            <span className="text-xs mb-1">Super</span>
+                            <Badge>$10</Badge>
+                          </TabsTrigger>
+                          <TabsTrigger value="100" className="flex flex-col py-2 px-0 h-auto">
+                            <span className="text-xs mb-1">Mega</span>
+                            <Badge>$100</Badge>
+                          </TabsTrigger>
+                          <TabsTrigger value="500" className="flex flex-col py-2 px-0 h-auto">
+                            <span className="text-xs mb-1">Jackpot</span>
+                            <Badge>$500</Badge>
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="quantity">Number of Tickets</Label>
+                      <div className="flex gap-2 mt-2">
+                        <Input 
+                          id="quantity" 
+                          type="number" 
+                          min="1" 
+                          max="50"
+                          value={ticketCount}
+                          onChange={(e) => setTicketCount(Math.min(50, Math.max(1, parseInt(e.target.value) || 1)))}
+                        />
+                        <Select value={currency} onValueChange={(value: "WLD" | "USDC") => setCurrency(value)}>
+                          <SelectTrigger className="w-[110px]">
+                            <SelectValue placeholder="WLD" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="WLD">WLD</SelectItem>
+                            <SelectItem value="USDC">USDC</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-muted p-3 rounded-md">
+                      <div className="flex justify-between items-center">
+                        <span>Total Cost:</span>
+                        <span className="font-bold">{ticketCount * selectedAmount} {currency}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="flex flex-col gap-2">
+                  <Button 
+                    className="w-full gap-2" 
+                    onClick={handleBuyTickets}
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-4 w-4" />
+                        Buy Tickets with {currency}
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Tickets will be randomly generated for the next available draw.
+                  </p>
+                </CardFooter>
+              </Card>
+            )}
+          </div>
         </>
       )}
     </div>
