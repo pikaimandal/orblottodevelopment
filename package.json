@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "check-supabase": "node scripts/check-supabase.js"
+    "check-supabase": "node scripts/check-supabase.js",
+    "setup-simple-db": "node scripts/setup-simplified-schema.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

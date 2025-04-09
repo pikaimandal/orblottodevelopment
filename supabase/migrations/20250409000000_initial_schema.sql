@@ -1,6 +1,6 @@
 -- Create users table to store user profiles
 CREATE TABLE IF NOT EXISTS users (
-  id UUID REFERENCES auth.users PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   wallet_address TEXT UNIQUE NOT NULL,
   username TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()) NOT NULL,
@@ -87,6 +87,16 @@ CREATE POLICY "Users can view their own tickets" ON tickets
 CREATE POLICY "Users can view their own transactions" ON transactions
   FOR SELECT USING (auth.uid() = user_id);
 
+-- Add service role policies for API access
+CREATE POLICY "Service role can manage users" ON users
+  FOR ALL TO service_role USING (true);
+  
+CREATE POLICY "Service role can manage tickets" ON tickets
+  FOR ALL TO service_role USING (true);
+  
+CREATE POLICY "Service role can manage transactions" ON transactions
+  FOR ALL TO service_role USING (true);
+
 -- Create or replace function to update updated_at column
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -108,16 +118,16 @@ CREATE VIEW public_draws AS
   FROM draws
   WHERE status = 'completed';
 
--- Enable webhook function for user creation to automatically add to our users table
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+-- Check if wallet exists (case insensitive)
+CREATE OR REPLACE FUNCTION check_wallet_exists(wallet_to_check TEXT)
+RETURNS BOOLEAN AS $$
+DECLARE
+  exists_count INTEGER;
 BEGIN
-  INSERT INTO public.users (id, wallet_address, username)
-  VALUES (new.id, new.raw_user_meta_data->>'wallet_address', new.raw_user_meta_data->>'username');
-  RETURN new;
+  SELECT COUNT(*) INTO exists_count 
+  FROM users 
+  WHERE LOWER(wallet_address) = LOWER(wallet_to_check);
+  
+  RETURN exists_count > 0;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user(); 
+$$ LANGUAGE plpgsql; 

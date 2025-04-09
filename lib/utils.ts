@@ -41,12 +41,18 @@ export function shortenAddress(address: string): string {
  * @returns Shortened address in format 0x1234...5678
  */
 export function formatWalletAddress(address: string): string {
-  if (!address || address.length < 10) return address
+  if (!address) return '';
   
-  // For already formatted addresses (like dev mode addresses)
-  if (address.includes('...')) return address
+  // Remove any dev mode text
+  const cleanAddress = address.replace(/\s*\(dev\s*mode\)\s*/i, '').trim();
   
-  const start = address.slice(0, 6)
-  const end = address.slice(-4)
-  return `${start}...${end}`
+  // If it already contains ... just return it
+  if (cleanAddress.includes('...')) return cleanAddress;
+  
+  // Otherwise format it nicely
+  if (cleanAddress.length > 12) {
+    return `${cleanAddress.substring(0, 6)}...${cleanAddress.substring(cleanAddress.length - 4)}`;
+  }
+  
+  return cleanAddress;
 }

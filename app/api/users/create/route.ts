@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     
     try {
       // Simple test to ensure the client is authenticated with admin privileges
-      const { data: testData, error: testError } = await supabaseAdmin.rpc('postgres_version');
+      const { data: testData, error: testError } = await supabaseAdmin.from('ticket_types').select('count').limit(1);
       if (testError) {
         console.error('Supabase admin client authentication test failed:', testError);
         
@@ -156,145 +156,31 @@ export async function POST(request: Request) {
       );
     }
     
-    console.log('No existing user found, creating new auth user...');
+    console.log('No existing user found, creating new user directly...');
     
-    try {
-      // Step 1: Create an auth user first (critical for proper referencing)
-      const randomEmail = `${normalizedWalletAddress.substring(2, 8)}_${Date.now()}@orbuser.example`;
-      const randomPassword = `Password!${Math.random().toString(36).substring(2, 10)}`;
-      
-      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email: randomEmail,
-        password: randomPassword,
-        email_confirm: true, // Auto-confirm the email
-        user_metadata: {
+    // Skip the auth user creation and insert directly
+    // This will use the gen_random_uuid() function from the database
+    const { data: newUser, error: insertError } = await supabaseAdmin
+      .from('users')
+      .insert([
+        { 
           wallet_address: normalizedWalletAddress,
           username: username || 'worldapp_user'
         }
-      });
+      ])
+      .select()
+      .single();
       
-      if (authError) {
-        console.error('Error creating auth user:', authError);
-        
-        // For development, allow a fallback pattern
-        if (process.env.NODE_ENV === 'development') {
-          // In dev mode, proceed with direct user creation even if auth fails
-          const devUserId = generateUUID();
-          
-          // Step 2: Direct insert if auth user creation failed
-          try {
-            const { data: directUser, error: directError } = await supabaseAdmin
-              .from('users')
-              .insert([
-                { 
-                  id: devUserId, 
-                  wallet_address: normalizedWalletAddress,
-                  username: username || 'dev_user'
-                }
-              ])
-              .select()
-              .single();
-              
-            if (directError) {
-              console.error('Error creating direct user in dev mode:', directError);
-              throw directError;
-            }
-            
-            if (directUser) {
-              console.log('DEV MODE: Created direct user bypassing auth:', directUser);
-              return NextResponse.json({
-                message: 'DEV MODE: Direct user created',
-                user: directUser
-              }, { status: 201 });
-            }
-          } catch (directInsertError) {
-            console.error('Failed direct insert in dev mode:', directInsertError);
-          }
-          
-          // Last resort fallback for dev mode
-          console.log('DEV MODE: Returning mock user after auth error');
-          return NextResponse.json({
-            message: 'DEV MODE: Mock user created after auth error',
-            user: {
-              id: devUserId,
-              wallet_address: normalizedWalletAddress,
-              username: username || 'dev_user',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }
-          }, { status: 201 });
-        }
-        
-        return NextResponse.json(
-          { error: 'Failed to create auth user', details: authError },
-          { status: 500 }
-        );
-      }
+    if (insertError) {
+      console.error('Error creating user in database:', insertError);
       
-      if (!authUser || !authUser.user) {
-        return NextResponse.json(
-          { error: 'Failed to create auth user, no user returned' },
-          { status: 500 }
-        );
-      }
-      
-      const authUserId = authUser.user.id;
-      console.log('Created auth user with ID:', authUserId);
-      
-      // Step 2: Now use the auth user ID to create the profile in the users table
-      console.log('Inserting user profile into users table with ID:', authUserId);
-      const { data: newUser, error: insertError } = await supabaseAdmin
-        .from('users')
-        .insert([
-          { 
-            id: authUserId, // Use the Supabase Auth ID as the primary key
-            wallet_address: normalizedWalletAddress,
-            username: username || 'worldapp_user'
-          }
-        ])
-        .select()
-        .single();
-        
-      if (insertError) {
-        console.error('Error creating user in database:', insertError);
-        
-        // Attempt to clean up the auth user if profile creation failed
-        try {
-          console.log('Cleaning up auth user after profile creation error...');
-          await supabaseAdmin.auth.admin.deleteUser(authUserId);
-        } catch (cleanupError) {
-          console.error('Failed to clean up auth user after profile creation error:', cleanupError);
-        }
-        
-        return NextResponse.json(
-          { error: 'Failed to create user profile', details: insertError },
-          { status: 500 }
-        );
-      }
-      
-      if (!newUser) {
-        return NextResponse.json(
-          { error: 'User was created but no data was returned' },
-          { status: 500 }
-        );
-      }
-      
-      console.log('Successfully created new user:', newUser);
-      
-      return NextResponse.json(
-        { message: 'User created successfully', user: newUser },
-        { status: 201 }
-      );
-    } catch (userCreationError) {
-      console.error('Unexpected error in user creation process:', userCreationError);
-      
-      // For development, allow a fallback pattern
+      // For development, last resort mock user
       if (process.env.NODE_ENV === 'development') {
         const devUserId = generateUUID();
-        console.log('DEV MODE: Returning mock user after user creation exception');
+        console.log('DEV MODE: Returning mock user after insert error');
         
         return NextResponse.json({
-          message: 'DEV MODE: Mock user created after creation exception',
+          message: 'DEV MODE: Mock user created after insert error',
           user: {
             id: devUserId,
             wallet_address: normalizedWalletAddress,
@@ -306,10 +192,24 @@ export async function POST(request: Request) {
       }
       
       return NextResponse.json(
-        { error: 'Error in user creation process', details: userCreationError },
+        { error: 'Failed to create user profile', details: insertError },
         { status: 500 }
       );
     }
+    
+    if (!newUser) {
+      return NextResponse.json(
+        { error: 'User was created but no data was returned' },
+        { status: 500 }
+      );
+    }
+    
+    console.log('Successfully created new user:', newUser);
+    
+    return NextResponse.json(
+      { message: 'User created successfully', user: newUser },
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Error in user creation API:', error);
     return NextResponse.json(

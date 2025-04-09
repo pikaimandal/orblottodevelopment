@@ -1,4 +1,5 @@
 "use client"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -21,7 +22,7 @@ export default function ProfilePage() {
   const [totalTickets, setTotalTickets] = useState(0)
   const [totalWon, setTotalWon] = useState(0)
   const [isCreatingUser, setIsCreatingUser] = useState(false)
-
+  
   // Effect to handle synchronization between wallet connection and Supabase auth
   useEffect(() => {
     const syncWalletWithSupabase = async () => {
@@ -42,10 +43,10 @@ export default function ProfilePage() {
           if (existingUser) {
             console.log('User found by wallet address in database:', existingUser);
             // We'll use the signIn method to set the user in context
-            await signIn(walletAddress, username);
+            await signIn(walletAddress, username || undefined);
           } else {
             // Create the user in Supabase using our updated context
-            await signIn(walletAddress, username);
+            await signIn(walletAddress, username || undefined);
             console.log('User created in Supabase');
             
             // No need to manually set user as signIn will do it
@@ -161,7 +162,7 @@ export default function ProfilePage() {
   return (
     <div className="container py-6 pb-20">
       <h1 className="text-2xl font-bold mb-6">Profile</h1>
-
+      
       {(!isConnected || !user) ? (
         <Card>
           <CardHeader>
